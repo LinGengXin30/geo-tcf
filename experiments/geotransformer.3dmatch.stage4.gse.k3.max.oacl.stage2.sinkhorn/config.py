@@ -33,6 +33,7 @@ ensure_dir(_C.registration_dir)
 # data
 _C.data = edict()
 _C.data.dataset_root = osp.join(_C.root_dir, 'data', '3DMatch')
+# _C.data.dataset_root = osp.join("/home/fang/Downloads/3Dmatch_data")
 
 # train data
 _C.train = edict()

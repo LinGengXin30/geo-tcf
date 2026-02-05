@@ -35,8 +35,8 @@ _C.data.dataset_root = osp.join(_C.root_dir, 'data', 'Kitti')
 # train data
 _C.train = edict()
 _C.train.batch_size = 1
-_C.train.num_workers = 8
-_C.train.point_limit = 30000
+_C.train.num_workers = 4
+_C.train.point_limit = 2000
 _C.train.use_augmentation = True
 _C.train.augmentation_noise = 0.01
 _C.train.augmentation_min_scale = 0.8
@@ -47,7 +47,7 @@ _C.train.augmentation_rotation = 1.0
 # test config
 _C.test = edict()
 _C.test.batch_size = 1
-_C.test.num_workers = 8
+_C.test.num_workers =4
 _C.test.point_limit = None
 
 # eval config
@@ -70,8 +70,8 @@ _C.optim.lr = 1e-4
 _C.optim.lr_decay = 0.95
 _C.optim.lr_decay_steps = 4
 _C.optim.weight_decay = 1e-6
-_C.optim.max_epoch = 160
-_C.optim.grad_acc_steps = 1
+_C.optim.max_epoch = 320
+_C.optim.grad_acc_steps = 4
 
 # model - backbone
 _C.backbone = edict()
@@ -85,7 +85,7 @@ _C.backbone.init_sigma = _C.backbone.base_sigma * _C.backbone.init_voxel_size
 _C.backbone.group_norm = 32
 _C.backbone.input_dim = 1
 _C.backbone.init_dim = 64
-_C.backbone.output_dim = 256
+_C.backbone.output_dim = 128
 
 # model - Global
 _C.model = edict()
@@ -103,7 +103,7 @@ _C.coarse_matching.dual_normalization = True
 # model - GeoTransformer
 _C.geotransformer = edict()
 _C.geotransformer.input_dim = 2048
-_C.geotransformer.hidden_dim = 128
+_C.geotransformer.hidden_dim = 64
 _C.geotransformer.output_dim = 256
 _C.geotransformer.num_heads = 4
 _C.geotransformer.blocks = ['self', 'cross', 'self', 'cross', 'self', 'cross']
