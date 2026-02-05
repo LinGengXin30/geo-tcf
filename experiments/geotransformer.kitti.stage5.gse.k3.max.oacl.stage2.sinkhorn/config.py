@@ -34,9 +34,9 @@ _C.data.dataset_root = osp.join(_C.root_dir, 'data', 'Kitti')
 
 # train data
 _C.train = edict()
-_C.train.batch_size = 1
-_C.train.num_workers = 4
-_C.train.point_limit = 2000
+_C.train.batch_size = 2
+_C.train.num_workers = 8
+_C.train.point_limit = 1500
 _C.train.use_augmentation = True
 _C.train.augmentation_noise = 0.01
 _C.train.augmentation_min_scale = 0.8
@@ -62,7 +62,7 @@ _C.eval.rte_threshold = 2.0
 _C.ransac = edict()
 _C.ransac.distance_threshold = 0.3
 _C.ransac.num_points = 4
-_C.ransac.num_iterations = 50000
+_C.ransac.num_iterations = 20000
 
 # optim config
 _C.optim = edict()
@@ -70,12 +70,12 @@ _C.optim.lr = 1e-4
 _C.optim.lr_decay = 0.95
 _C.optim.lr_decay_steps = 4
 _C.optim.weight_decay = 1e-6
-_C.optim.max_epoch = 320
-_C.optim.grad_acc_steps = 4
+_C.optim.max_epoch = 200
+_C.optim.grad_acc_steps = 2
 
 # model - backbone
 _C.backbone = edict()
-_C.backbone.num_stages = 5
+_C.backbone.num_stages = 4
 _C.backbone.init_voxel_size = 0.3
 _C.backbone.kernel_size = 15
 _C.backbone.base_radius = 4.25
@@ -91,7 +91,7 @@ _C.backbone.output_dim = 128
 _C.model = edict()
 _C.model.ground_truth_matching_radius = 0.6
 _C.model.num_points_in_patch = 128
-_C.model.num_sinkhorn_iterations = 100
+_C.model.num_sinkhorn_iterations = 30
 
 # model - Coarse Matching
 _C.coarse_matching = edict()
@@ -106,7 +106,7 @@ _C.geotransformer.input_dim = 2048
 _C.geotransformer.hidden_dim = 64
 _C.geotransformer.output_dim = 256
 _C.geotransformer.num_heads = 4
-_C.geotransformer.blocks = ['self', 'cross', 'self', 'cross', 'self', 'cross']
+_C.geotransformer.blocks = ['self', 'cross', 'self', 'cross']
 _C.geotransformer.sigma_d = 4.8
 _C.geotransformer.sigma_a = 15
 _C.geotransformer.angle_k = 3
@@ -122,7 +122,7 @@ _C.fine_matching.use_dustbin = False
 _C.fine_matching.use_global_score = False
 _C.fine_matching.correspondence_threshold = 3
 _C.fine_matching.correspondence_limit = None
-_C.fine_matching.num_refinement_steps = 5
+_C.fine_matching.num_refinement_steps = 3
 
 # loss - Coarse level
 _C.coarse_loss = edict()
