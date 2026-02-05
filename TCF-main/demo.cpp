@@ -51,9 +51,7 @@ int main(int argc, char** argv) {
     // Start registration
     TicToc tic_tcf;
     std::srand(unsigned(std::time(nullptr)));
-    // Create dummy sigmas for demo
-    Eigen::Matrix<float, 2, Eigen::Dynamic> sigmas = Eigen::Matrix<float, 2, Eigen::Dynamic>::Zero(2, source_match.rows());
-    Eigen::Matrix4f trans = twoStageConsensusFilter(source_match, target_match, sigmas, 3*th);
+    Eigen::Matrix4f trans = twoStageConsensusFilter(source_match, target_match, 3*th);
     double time_registration = tic_tcf.toc();
     std::cout << "Runtime: " << time_registration << " ms.\n";
 

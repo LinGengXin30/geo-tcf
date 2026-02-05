@@ -71,55 +71,24 @@ class FineMatchingLoss(nn.Module):
         return loss
 
 
-class UncertaintyLoss(nn.Module):
-    def __init__(self):
-        super(UncertaintyLoss, self).__init__()
-
-    def forward(self, pred_coors, gt_coors, pred_log_var):
-        # clamp log variance to avoid numerical instability
-        pred_log_var = torch.clamp(pred_log_var, min=-10, max=10)
-        
-        dist_sq = torch.sum((pred_coors - gt_coors)**2, dim=-1)
-        precision = torch.exp(-pred_log_var)
-        loss = 0.5 * precision * dist_sq + 0.5 * pred_log_var
-        
-        return loss.mean()
-
-
 class OverallLoss(nn.Module):
     def __init__(self, cfg):
         super(OverallLoss, self).__init__()
         self.coarse_loss = CoarseMatchingLoss(cfg)
         self.fine_loss = FineMatchingLoss(cfg)
-        self.uncertainty_loss = UncertaintyLoss()
         self.weight_coarse_loss = cfg.loss.weight_coarse_loss
         self.weight_fine_loss = cfg.loss.weight_fine_loss
 
     def forward(self, output_dict, data_dict):
         coarse_loss = self.coarse_loss(output_dict)
         fine_loss = self.fine_loss(output_dict, data_dict)
-        
-        # Uncertainty Loss
-        ref_corr_points = output_dict['ref_corr_points']
-        src_corr_points = output_dict['src_corr_points']
-        ref_uncertainties = output_dict['ref_uncertainties']
-        src_uncertainties = output_dict['src_uncertainties']
-        transform = data_dict['transform']
-        
-        src_corr_points_trans = apply_transform(src_corr_points, transform)
-        
-        loss_unc_ref = self.uncertainty_loss(ref_corr_points, src_corr_points_trans, ref_uncertainties)
-        loss_unc_src = self.uncertainty_loss(src_corr_points_trans, ref_corr_points, src_uncertainties)
-        
-        uncertainty_loss = loss_unc_ref + loss_unc_src
 
-        loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss + uncertainty_loss
+        loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss
 
         return {
             'loss': loss,
             'c_loss': coarse_loss,
             'f_loss': fine_loss,
-            'u_loss': uncertainty_loss,
         }
 
 

@@ -134,28 +134,22 @@ class LocalGlobalRegistration(nn.Module):
         new_corr_scores = corr_scores * inlier_masks.float()
         return new_corr_scores
 
-    def local_to_global_registration(self, ref_knn_points, src_knn_points, score_mat, corr_mat, ref_uncertainties, src_uncertainties):
+    def local_to_global_registration(self, ref_knn_points, src_knn_points, score_mat, corr_mat):
         # extract dense correspondences
         batch_indices, ref_indices, src_indices = torch.nonzero(corr_mat, as_tuple=True)
         global_ref_corr_points = ref_knn_points[batch_indices, ref_indices]
         global_src_corr_points = src_knn_points[batch_indices, src_indices]
         global_corr_scores = score_mat[batch_indices, ref_indices, src_indices]
-        global_ref_uncertainties = ref_uncertainties[batch_indices, ref_indices]
-        global_src_uncertainties = src_uncertainties[batch_indices, src_indices]
 
         # build verification set
         if self.correspondence_limit is not None and global_corr_scores.shape[0] > self.correspondence_limit:
             corr_scores, sel_indices = global_corr_scores.topk(k=self.correspondence_limit, largest=True)
             ref_corr_points = global_ref_corr_points[sel_indices]
             src_corr_points = global_src_corr_points[sel_indices]
-            ref_uncertainties = global_ref_uncertainties[sel_indices]
-            src_uncertainties = global_src_uncertainties[sel_indices]
         else:
             ref_corr_points = global_ref_corr_points
             src_corr_points = global_src_corr_points
             corr_scores = global_corr_scores
-            ref_uncertainties = global_ref_uncertainties
-            src_uncertainties = global_src_uncertainties
 
         # compute starting and ending index of each patch correspondence.
         # torch.nonzero is row-major, so the correspondences from the same patch correspondence are consecutive.
@@ -197,7 +191,7 @@ class LocalGlobalRegistration(nn.Module):
             )
             estimated_transform = self.procrustes(src_corr_points, ref_corr_points, cur_corr_scores)
 
-        return global_ref_corr_points, global_src_corr_points, global_corr_scores, estimated_transform, ref_uncertainties, src_uncertainties
+        return global_ref_corr_points, global_src_corr_points, global_corr_scores, estimated_transform
 
     def forward(
         self,
@@ -207,8 +201,6 @@ class LocalGlobalRegistration(nn.Module):
         src_knn_masks,
         score_mat,
         global_scores,
-        ref_uncertainties,
-        src_uncertainties,
     ):
         r"""Point Matching Module forward propagation with Local-to-Global registration.
 
@@ -219,16 +211,12 @@ class LocalGlobalRegistration(nn.Module):
             src_knn_masks (BoolTensor): (B, K)
             score_mat (Tensor): (B, K, K) or (B, K + 1, K + 1), log likelihood
             global_scores (Tensor): (B,)
-            ref_uncertainties (Tensor): (B, K)
-            src_uncertainties (Tensor): (B, K)
 
         Returns:
             ref_corr_points: torch.LongTensor (C, 3)
             src_corr_points: torch.LongTensor (C, 3)
             corr_scores: torch.Tensor (C,)
             estimated_transform: torch.Tensor (4, 4)
-            ref_uncertainties: torch.Tensor (C,)
-            src_uncertainties: torch.Tensor (C,)
         """
         score_mat = torch.exp(score_mat)
 
@@ -240,8 +228,8 @@ class LocalGlobalRegistration(nn.Module):
             score_mat = score_mat * global_scores.view(-1, 1, 1)
         score_mat = score_mat * corr_mat.float()
 
-        ref_corr_points, src_corr_points, corr_scores, estimated_transform, ref_uncertainties, src_uncertainties = self.local_to_global_registration(
-            ref_knn_points, src_knn_points, score_mat, corr_mat, ref_uncertainties, src_uncertainties
+        ref_corr_points, src_corr_points, corr_scores, estimated_transform = self.local_to_global_registration(
+            ref_knn_points, src_knn_points, score_mat, corr_mat
         )
 
-        return ref_corr_points, src_corr_points, corr_scores, estimated_transform, ref_uncertainties, src_uncertainties
+        return ref_corr_points, src_corr_points, corr_scores, estimated_transform

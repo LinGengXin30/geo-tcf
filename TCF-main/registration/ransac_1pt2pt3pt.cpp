@@ -1,6 +1,6 @@
 #include "registration/ransac_1pt2pt3pt.h"
 
-Matf6D ransac1Pt(Matf6D& x, Eigen::Matrix<float, 2, Eigen::Dynamic>& sigmas, float t, float gamma, float max_t) {
+Matf6D ransac1Pt(Matf6D& x, float t) {
     int s = 1;
     int max_trials = 10000;
     int npts = x.cols();
@@ -12,12 +12,8 @@ Matf6D ransac1Pt(Matf6D& x, Eigen::Matrix<float, 2, Eigen::Dynamic>& sigmas, flo
 
     float N = 1; // Dummy initialisation for number of trials.            
     float t2 = 2.0 * t; // 
-    if (max_t < 0) max_t = 5.0 * t2;
     float eps = std::numeric_limits<float>::epsilon();
     
-    // Precompute combined sigmas (sigma_src + sigma_dst) for each correspondence
-    Matf1D combined_sigmas = sigmas.colwise().sum(); // (1, N)
-
     while (N > trialcount) {
         int ind = std::rand() % npts;
         Eigen::Matrix<float, 6, 1> seedpoint = x.col(ind);
@@ -27,15 +23,9 @@ Matf6D ransac1Pt(Matf6D& x, Eigen::Matrix<float, 2, Eigen::Dynamic>& sigmas, flo
         Matf1D D2 = lineset.bottomRows(3).colwise().norm();
         Matf1D len = (D1 - D2).array().abs();
        
-        // Dynamic threshold logic
-        float seed_sigma = combined_sigmas(0, ind);
-        Matf1D margins = gamma * (combined_sigmas.array() + seed_sigma);
-        Matf1D dynamic_thresh = (margins + t2).cwiseMin(max_t);
-
-        Mati1D flag = (len.array() < dynamic_thresh.array()).cast<int>();
+        Mati1D flag = (len.array() < t2).cast<int>();
         Mati1D inlier_column = getNonZeroColumnIndicesFromRowVector(flag);
         Matf6D inliers = x(Eigen::all, inlier_column);
-        Matf1D inlier_sigmas = combined_sigmas(Eigen::all, inlier_column);
 
         int s1 = inliers.cols();
         int inlier_size = 0; // 
@@ -48,14 +38,7 @@ Matf6D ransac1Pt(Matf6D& x, Eigen::Matrix<float, 2, Eigen::Dynamic>& sigmas, flo
             computeDistanceMatrix(src, src_dist_matrix);
             computeDistanceMatrix(dst, dst_dist_matrix);
             Eigen::MatrixXf Z = (src_dist_matrix - dst_dist_matrix).array().abs();
-            
-            // Dynamic threshold for refinement
-            int M = inliers.cols();
-            Eigen::MatrixXf sigma_matrix = inlier_sigmas.transpose().replicate(1, M) + inlier_sigmas.replicate(M, 1);
-            Eigen::MatrixXf margin_matrix = gamma * sigma_matrix;
-            Eigen::MatrixXf dynamic_thresh_matrix = (margin_matrix.array() + t2).min(max_t);
-            
-            Eigen::MatrixXi F = (Z.array() < dynamic_thresh_matrix.array()).cast<int>();
+            Eigen::MatrixXi F = (Z.array() < t2).cast<int>();
             inlier_size = std::ceil(std::sqrt(F.sum()));
             
             Mati1D F_colwise_sum = F.colwise().sum();
@@ -66,7 +49,6 @@ Matf6D ransac1Pt(Matf6D& x, Eigen::Matrix<float, 2, Eigen::Dynamic>& sigmas, flo
                 sorted_column_indices_total.begin() + inlier_size);
             Matf6D selected_inliers = inliers(Eigen::all, sorted_column_indices_inlier);
             inliers = selected_inliers;
-            inlier_sigmas = inlier_sigmas(Eigen::all, sorted_column_indices_inlier);
 
             if ((s1 - inlier_size) < 5) {
                 break;
@@ -85,7 +67,7 @@ Matf6D ransac1Pt(Matf6D& x, Eigen::Matrix<float, 2, Eigen::Dynamic>& sigmas, flo
             N = std::max(N, static_cast<float>(RansacN1)); // at least try 
         }
         ++trialcount; 
-        
+
         if (trialcount > max_trials) {
             break;
         }

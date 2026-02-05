@@ -1,6 +1,6 @@
 #include "registration/tcf.h"
 
-Eigen::Matrix4f twoStageConsensusFilter(MatfD3 match_1, MatfD3 match_2, Eigen::Matrix<float, 2, Eigen::Dynamic> sigmas, float t, float gamma, float max_t) {
+Eigen::Matrix4f twoStageConsensusFilter(MatfD3 match_1, MatfD3 match_2, float t) {
     Eigen::Matrix4f trans = Eigen::Matrix4f::Identity();
     int source_num = match_1.rows();
     int target_num = match_2.rows();
@@ -20,7 +20,7 @@ Eigen::Matrix4f twoStageConsensusFilter(MatfD3 match_1, MatfD3 match_2, Eigen::M
     stacked_mat.bottomRows(3) = match_2.transpose();
 
     // ONe-point RANSAC
-    Matf6D xinliers_1 = ransac1Pt(stacked_mat, sigmas, t, gamma, max_t);
+    Matf6D xinliers_1 = ransac1Pt(stacked_mat, t);
     if (xinliers_1.cols() < 3) {
         PCL_WARN("ransac 1 matches less than 3\n");
         return trans;
