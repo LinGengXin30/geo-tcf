@@ -12,6 +12,7 @@ from geotransformer.modules.geotransformer import (
     SuperPointTargetGenerator,
     LocalGlobalRegistration,
 )
+from geotransformer.modules.geotransformer.rigid_transformation import apply_transform
 
 from backbone import KPConvFPN
 
