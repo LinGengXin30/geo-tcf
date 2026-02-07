@@ -16,6 +16,96 @@ from geotransformer.modules.geotransformer import (
 from backbone import KPConvFPN
 
 
+class RobustLocalGlobalRegistration(LocalGlobalRegistration):
+    def local_to_global_registration(self, ref_knn_points, src_knn_points, score_mat, corr_mat, ref_knn_log_var, src_knn_log_var):
+        # extract dense correspondences
+        batch_indices, ref_indices, src_indices = torch.nonzero(corr_mat, as_tuple=True)
+        global_ref_corr_points = ref_knn_points[batch_indices, ref_indices]
+        global_src_corr_points = src_knn_points[batch_indices, src_indices]
+        global_corr_scores = score_mat[batch_indices, ref_indices, src_indices]
+        global_ref_corr_log_var = ref_knn_log_var[batch_indices, ref_indices]
+        global_src_corr_log_var = src_knn_log_var[batch_indices, src_indices]
+
+        # build verification set
+        if self.correspondence_limit is not None and global_corr_scores.shape[0] > self.correspondence_limit:
+            corr_scores, sel_indices = global_corr_scores.topk(k=self.correspondence_limit, largest=True)
+            ref_corr_points = global_ref_corr_points[sel_indices]
+            src_corr_points = global_src_corr_points[sel_indices]
+        else:
+            ref_corr_points = global_ref_corr_points
+            src_corr_points = global_src_corr_points
+            corr_scores = global_corr_scores
+
+        # compute starting and ending index of each patch correspondence.
+        # torch.nonzero is row-major, so the correspondences from the same patch correspondence are consecutive.
+        # find the first occurrence of each batch index, then the chunk of this batch can be obtained.
+        unique_masks = torch.ne(batch_indices[1:], batch_indices[:-1])
+        unique_indices = torch.nonzero(unique_masks, as_tuple=True)[0] + 1
+        unique_indices = unique_indices.detach().cpu().numpy().tolist()
+        unique_indices = [0] + unique_indices + [batch_indices.shape[0]]
+        chunks = [
+            (x, y) for x, y in zip(unique_indices[:-1], unique_indices[1:]) if y - x >= self.correspondence_threshold
+        ]
+
+        batch_size = len(chunks)
+        if batch_size > 0:
+            # local registration
+            batch_ref_corr_points, batch_src_corr_points, batch_corr_scores = self.convert_to_batch(
+                global_ref_corr_points, global_src_corr_points, global_corr_scores, chunks
+            )
+            batch_transforms = self.procrustes(batch_src_corr_points, batch_ref_corr_points, batch_corr_scores)
+            batch_aligned_src_corr_points = apply_transform(src_corr_points.unsqueeze(0), batch_transforms)
+            batch_corr_residuals = torch.linalg.norm(
+                ref_corr_points.unsqueeze(0) - batch_aligned_src_corr_points, dim=2
+            )
+            batch_inlier_masks = torch.lt(batch_corr_residuals, self.acceptance_radius)  # (P, N)
+            best_index = batch_inlier_masks.sum(dim=1).argmax()
+            cur_corr_scores = corr_scores * batch_inlier_masks[best_index].float()
+        else:
+            # degenerate: initialize transformation with all correspondences
+            estimated_transform = self.procrustes(src_corr_points, ref_corr_points, corr_scores)
+            cur_corr_scores = self.recompute_correspondence_scores(
+                ref_corr_points, src_corr_points, corr_scores, estimated_transform
+            )
+
+        # global refinement
+        estimated_transform = self.procrustes(src_corr_points, ref_corr_points, cur_corr_scores)
+        for _ in range(self.num_refinement_steps - 1):
+            cur_corr_scores = self.recompute_correspondence_scores(
+                ref_corr_points, src_corr_points, corr_scores, estimated_transform
+            )
+            estimated_transform = self.procrustes(src_corr_points, ref_corr_points, cur_corr_scores)
+
+        return global_ref_corr_points, global_src_corr_points, global_corr_scores, estimated_transform, global_ref_corr_log_var, global_src_corr_log_var
+
+    def forward(
+        self,
+        ref_knn_points,
+        src_knn_points,
+        ref_knn_masks,
+        src_knn_masks,
+        score_mat,
+        global_scores,
+        ref_knn_log_var,
+        src_knn_log_var,
+    ):
+        score_mat = torch.exp(score_mat)
+
+        corr_mat = self.compute_correspondence_matrix(score_mat, ref_knn_masks, src_knn_masks)  # (B, K, K)
+
+        if self.use_dustbin:
+            score_mat = score_mat[:, :-1, :-1]
+        if self.use_global_score:
+            score_mat = score_mat * global_scores.view(-1, 1, 1)
+        score_mat = score_mat * corr_mat.float()
+
+        ref_corr_points, src_corr_points, corr_scores, estimated_transform, ref_corr_log_var, src_corr_log_var = self.local_to_global_registration(
+            ref_knn_points, src_knn_points, score_mat, corr_mat, ref_knn_log_var, src_knn_log_var
+        )
+
+        return ref_corr_points, src_corr_points, corr_scores, estimated_transform, ref_corr_log_var, src_corr_log_var
+
+
 class GeoTransformer(nn.Module):
     def __init__(self, cfg):
         super(GeoTransformer, self).__init__()
@@ -52,7 +142,7 @@ class GeoTransformer(nn.Module):
             cfg.coarse_matching.num_correspondences, cfg.coarse_matching.dual_normalization
         )
 
-        self.fine_matching = LocalGlobalRegistration(
+        self.fine_matching = RobustLocalGlobalRegistration(
             cfg.fine_matching.topk,
             cfg.fine_matching.acceptance_radius,
             mutual=cfg.fine_matching.mutual,
