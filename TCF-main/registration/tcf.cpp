@@ -1,16 +1,16 @@
 #include "registration/tcf.h"
 
-Eigen::Matrix4f twoStageConsensusFilter(MatfD3 match_1, MatfD3 match_2, float t) {
+Eigen::Matrix4f twoStageConsensusFilter(MatfD3 match_1, MatfD3 match_2, Matf1D sigma_1, Matf1D sigma_2, float t) {
     Eigen::Matrix4f trans = Eigen::Matrix4f::Identity();
     int source_num = match_1.rows();
     int target_num = match_2.rows();
 
     if (source_num != target_num) {
-        PCL_ERROR("Correspondence must have the same dimension.\n"); 
+        PCL_ERROR("Correspondence must have the same dimension.\n");
         return trans;
     }
     if (source_num < 3) {
-        PCL_WARN("Must have at least 3 points to fitTING.\n"); 
+        PCL_WARN("Must have at least 3 points to fitTING.\n");
         return trans;
     }
 
@@ -19,8 +19,12 @@ Eigen::Matrix4f twoStageConsensusFilter(MatfD3 match_1, MatfD3 match_2, float t)
     stacked_mat.topRows(3) = match_1.transpose();
     stacked_mat.bottomRows(3) = match_2.transpose();
 
+    Matf2D stacked_sigmas(2, source_num);
+    stacked_sigmas.row(0) = sigma_1;
+    stacked_sigmas.row(1) = sigma_2;
+
     // ONe-point RANSAC
-    Matf6D xinliers_1 = ransac1Pt(stacked_mat, t);
+    Matf6D xinliers_1 = ransac1Pt(stacked_mat, stacked_sigmas, t);
     if (xinliers_1.cols() < 3) {
         PCL_WARN("ransac 1 matches less than 3\n");
         return trans;

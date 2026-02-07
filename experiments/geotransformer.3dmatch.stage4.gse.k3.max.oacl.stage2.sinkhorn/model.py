@@ -64,6 +64,13 @@ class GeoTransformer(nn.Module):
             num_refinement_steps=cfg.fine_matching.num_refinement_steps,
         )
 
+        self.uncertainty_head = nn.Sequential(
+            nn.Linear(cfg.backbone.output_dim, cfg.backbone.output_dim // 2),
+            nn.ReLU(),
+            nn.BatchNorm1d(cfg.backbone.output_dim // 2),
+            nn.Linear(cfg.backbone.output_dim // 2, 1),
+        )
+
         self.optimal_transport = LearnableLogOptimalTransport(cfg.model.num_sinkhorn_iterations)
 
     def forward(self, data_dict):
@@ -183,6 +190,18 @@ class GeoTransformer(nn.Module):
         output_dict['ref_node_corr_knn_masks'] = ref_node_corr_knn_masks
         output_dict['src_node_corr_knn_masks'] = src_node_corr_knn_masks
 
+        # Uncertainty Head
+        ref_uncertainty_f = self.uncertainty_head(ref_feats_f)
+        src_uncertainty_f = self.uncertainty_head(src_feats_f)
+        
+        ref_padded_uncertainty_f = torch.cat([ref_uncertainty_f, torch.zeros_like(ref_uncertainty_f[:1])], dim=0)
+        src_padded_uncertainty_f = torch.cat([src_uncertainty_f, torch.zeros_like(src_uncertainty_f[:1])], dim=0)
+        ref_node_corr_knn_uncertainty = index_select(ref_padded_uncertainty_f, ref_node_corr_knn_indices, dim=0)
+        src_node_corr_knn_uncertainty = index_select(src_padded_uncertainty_f, src_node_corr_knn_indices, dim=0)
+
+        output_dict['ref_node_corr_knn_uncertainty'] = ref_node_corr_knn_uncertainty
+        output_dict['src_node_corr_knn_uncertainty'] = src_node_corr_knn_uncertainty
+
         # 8. Optimal transport
         matching_scores = torch.einsum('bnd,bmd->bnm', ref_node_corr_knn_feats, src_node_corr_knn_feats)  # (P, K, K)
         matching_scores = matching_scores / feats_f.shape[1] ** 0.5
@@ -195,19 +214,23 @@ class GeoTransformer(nn.Module):
             if not self.fine_matching.use_dustbin:
                 matching_scores = matching_scores[:, :-1, :-1]
 
-            ref_corr_points, src_corr_points, corr_scores, estimated_transform = self.fine_matching(
+            ref_corr_points, src_corr_points, corr_scores, estimated_transform, ref_corr_uncertainty, src_corr_uncertainty = self.fine_matching(
                 ref_node_corr_knn_points,
                 src_node_corr_knn_points,
                 ref_node_corr_knn_masks,
                 src_node_corr_knn_masks,
                 matching_scores,
                 node_corr_scores,
+                ref_knn_uncertainty=ref_node_corr_knn_uncertainty,
+                src_knn_uncertainty=src_node_corr_knn_uncertainty,
             )
 
             output_dict['ref_corr_points'] = ref_corr_points
             output_dict['src_corr_points'] = src_corr_points
             output_dict['corr_scores'] = corr_scores
             output_dict['estimated_transform'] = estimated_transform
+            output_dict['ref_corr_uncertainty'] = ref_corr_uncertainty
+            output_dict['src_corr_uncertainty'] = src_corr_uncertainty
 
         return output_dict
 

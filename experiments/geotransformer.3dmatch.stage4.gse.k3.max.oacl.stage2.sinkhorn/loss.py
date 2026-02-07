@@ -71,24 +71,73 @@ class FineMatchingLoss(nn.Module):
         return loss
 
 
+class UncertaintyLoss(nn.Module):
+    def __init__(self, cfg):
+        super(UncertaintyLoss, self).__init__()
+        self.positive_radius = cfg.fine_loss.positive_radius
+
+    def forward(self, output_dict, data_dict):
+        ref_node_corr_knn_points = output_dict['ref_node_corr_knn_points']
+        src_node_corr_knn_points = output_dict['src_node_corr_knn_points']
+        ref_node_corr_knn_masks = output_dict['ref_node_corr_knn_masks']
+        src_node_corr_knn_masks = output_dict['src_node_corr_knn_masks']
+        ref_node_corr_knn_uncertainty = output_dict['ref_node_corr_knn_uncertainty']
+        src_node_corr_knn_uncertainty = output_dict['src_node_corr_knn_uncertainty']
+        transform = data_dict['transform']
+
+        src_node_corr_knn_points = apply_transform(src_node_corr_knn_points, transform)
+        dists = pairwise_distance(ref_node_corr_knn_points, src_node_corr_knn_points)  # (B, N, M)
+
+        gt_masks = torch.logical_and(ref_node_corr_knn_masks.unsqueeze(2), src_node_corr_knn_masks.unsqueeze(1))
+        gt_corr_map = torch.lt(dists, self.positive_radius ** 2)
+        gt_corr_map = torch.logical_and(gt_corr_map, gt_masks)
+
+        if gt_corr_map.sum() == 0:
+            return torch.tensor(0.0).cuda()
+
+        dist_sq = dists[gt_corr_map]
+
+        batch_indices, ref_indices, src_indices = torch.nonzero(gt_corr_map, as_tuple=True)
+        s_p = ref_node_corr_knn_uncertainty[batch_indices, ref_indices]
+        s_q = src_node_corr_knn_uncertainty[batch_indices, src_indices]
+
+        # Clamp s to prevent instability
+        s_p = torch.clamp(s_p, min=-10, max=10)
+        s_q = torch.clamp(s_q, min=-10, max=10)
+
+        var_p = torch.exp(s_p)
+        var_q = torch.exp(s_q)
+        var_pair = var_p + var_q
+        s_pair = torch.log(var_pair)
+
+        precision = torch.exp(-s_pair)
+        loss = 0.5 * precision * dist_sq.unsqueeze(1) + 0.5 * s_pair
+
+        return loss.mean()
+
+
 class OverallLoss(nn.Module):
     def __init__(self, cfg):
         super(OverallLoss, self).__init__()
         self.coarse_loss = CoarseMatchingLoss(cfg)
         self.fine_loss = FineMatchingLoss(cfg)
+        self.uncertainty_loss = UncertaintyLoss(cfg)
         self.weight_coarse_loss = cfg.loss.weight_coarse_loss
         self.weight_fine_loss = cfg.loss.weight_fine_loss
+        self.weight_uncertainty_loss = getattr(cfg.loss, 'weight_uncertainty_loss', 1.0)
 
     def forward(self, output_dict, data_dict):
         coarse_loss = self.coarse_loss(output_dict)
         fine_loss = self.fine_loss(output_dict, data_dict)
+        uncertainty_loss = self.uncertainty_loss(output_dict, data_dict)
 
-        loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss
+        loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss + self.weight_uncertainty_loss * uncertainty_loss
 
         return {
             'loss': loss,
             'c_loss': coarse_loss,
             'f_loss': fine_loss,
+            'u_loss': uncertainty_loss,
         }
 
 

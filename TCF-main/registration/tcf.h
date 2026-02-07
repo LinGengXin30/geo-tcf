@@ -3,6 +3,6 @@
 #include "registration/ransac_1pt2pt3pt.h"
 #include "registration/irls_welsch.h"
 
-Eigen::Matrix4f twoStageConsensusFilter(MatfD3 match_1, MatfD3 match_2, float t);
+Eigen::Matrix4f twoStageConsensusFilter(MatfD3 match_1, MatfD3 match_2, Matf1D sigma_1, Matf1D sigma_2, float t);
 
 #endif

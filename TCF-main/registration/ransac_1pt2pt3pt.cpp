@@ -1,9 +1,16 @@
 #include "registration/ransac_1pt2pt3pt.h"
 
-Matf6D ransac1Pt(Matf6D& x, float t) {
+Matf6D ransac1Pt(Matf6D& x, Matf2D& sigmas, float t) {
     int s = 1;
     int max_trials = 10000;
     int npts = x.cols();
+
+    // Precompute combined sigma
+    Matf1D sigma_s = (sigmas.row(0).array() * 0.5).exp();
+    Matf1D sigma_t = (sigmas.row(1).array() * 0.5).exp();
+    Matf1D sigma_corr = sigma_s + sigma_t;
+    float gamma = 2.0;
+    float max_thresh_ratio = 5.0;
 
     float p = 0.99; // Desired probability of choosing at least one samplefree from outliers
     int trialcount = 0;
@@ -23,9 +30,14 @@ Matf6D ransac1Pt(Matf6D& x, float t) {
         Matf1D D2 = lineset.bottomRows(3).colwise().norm();
         Matf1D len = (D1 - D2).array().abs();
        
-        Mati1D flag = (len.array() < t2).cast<int>();
+        float sigma_seed = sigma_corr(0, ind);
+        Matf1D margins = gamma * (sigma_corr.array() + sigma_seed);
+        Matf1D dynamic_t2 = (margins.array() + t2).min(max_thresh_ratio * t2);
+
+        Mati1D flag = (len.array() < dynamic_t2.array()).cast<int>();
         Mati1D inlier_column = getNonZeroColumnIndicesFromRowVector(flag);
         Matf6D inliers = x(Eigen::all, inlier_column);
+        Matf1D sub_sigma = sigma_corr(Eigen::all, inlier_column);
 
         int s1 = inliers.cols();
         int inlier_size = 0; // 
@@ -38,7 +50,12 @@ Matf6D ransac1Pt(Matf6D& x, float t) {
             computeDistanceMatrix(src, src_dist_matrix);
             computeDistanceMatrix(dst, dst_dist_matrix);
             Eigen::MatrixXf Z = (src_dist_matrix - dst_dist_matrix).array().abs();
-            Eigen::MatrixXi F = (Z.array() < t2).cast<int>();
+            
+            int M = inliers.cols();
+            Eigen::MatrixXf sigma_mat = sub_sigma.transpose().replicate(1, M) + sub_sigma.replicate(M, 1);
+            Eigen::MatrixXf dynamic_t2_mat = (sigma_mat.array() * gamma + t2).min(max_thresh_ratio * t2);
+
+            Eigen::MatrixXi F = (Z.array() < dynamic_t2_mat.array()).cast<int>();
             inlier_size = std::ceil(std::sqrt(F.sum()));
             
             Mati1D F_colwise_sum = F.colwise().sum();
@@ -49,6 +66,8 @@ Matf6D ransac1Pt(Matf6D& x, float t) {
                 sorted_column_indices_total.begin() + inlier_size);
             Matf6D selected_inliers = inliers(Eigen::all, sorted_column_indices_inlier);
             inliers = selected_inliers;
+            Matf1D selected_sigma = sub_sigma(Eigen::all, sorted_column_indices_inlier);
+            sub_sigma = selected_sigma;
 
             if ((s1 - inlier_size) < 5) {
                 break;

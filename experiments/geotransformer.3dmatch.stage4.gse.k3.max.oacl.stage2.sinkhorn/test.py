@@ -83,6 +83,8 @@ class Tester(SingleTester):
             src_node_corr_indices=release_cuda(output_dict['src_node_corr_indices']),
             ref_corr_points=release_cuda(output_dict['ref_corr_points']),
             src_corr_points=release_cuda(output_dict['src_corr_points']),
+            ref_corr_uncertainty=release_cuda(output_dict['ref_corr_uncertainty']),
+            src_corr_uncertainty=release_cuda(output_dict['src_corr_uncertainty']),
             corr_scores=release_cuda(output_dict['corr_scores']),
             gt_node_corr_indices=release_cuda(output_dict['gt_node_corr_indices']),
             gt_node_corr_overlaps=release_cuda(output_dict['gt_node_corr_overlaps']),

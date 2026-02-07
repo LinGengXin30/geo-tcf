@@ -3,7 +3,7 @@
 #include "utils/for_cloud.h"
 
 // One-point RANSAC
-Matf6D ransac1Pt(Matf6D& x, float t);
+Matf6D ransac1Pt(Matf6D& x, Matf2D& sigmas, float t);
 Mati1D getNonZeroColumnIndicesFromRowVector(const Mati1D& flags);
 void computeDistanceMatrix(const Matf3D& data, Eigen::MatrixXf& dist_matrix);
 void sortRowVectorDescending(const Mati1D& data, std::vector<int>& sorted_column_indices);
