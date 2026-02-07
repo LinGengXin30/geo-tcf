@@ -22,6 +22,7 @@ typedef pcl::PointCloud<pcl::PointXYZ>::Ptr CloudPtr;
 // Mat<type><rows><cols>, D:dynamic
 typedef Eigen::Matrix<float, 6, Eigen::Dynamic> Matf6D;
 typedef Eigen::Matrix<float, 3, Eigen::Dynamic> Matf3D;
+typedef Eigen::Matrix<float, 2, Eigen::Dynamic> Matf2D;
 typedef Eigen::Matrix<float, Eigen::Dynamic, 3> MatfD3;
 typedef Eigen::Matrix<int, 1, Eigen::Dynamic> Mati1D;
 typedef Eigen::Matrix<float, 1, Eigen::Dynamic> Matf1D;

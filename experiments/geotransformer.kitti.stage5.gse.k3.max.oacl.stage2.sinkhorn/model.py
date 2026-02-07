@@ -66,6 +66,12 @@ class GeoTransformer(nn.Module):
 
         self.optimal_transport = LearnableLogOptimalTransport(cfg.model.num_sinkhorn_iterations)
 
+        self.uncertainty_head = nn.Sequential(
+            nn.Linear(cfg.backbone.output_dim, cfg.backbone.output_dim // 2),
+            nn.ReLU(),
+            nn.Linear(cfg.backbone.output_dim // 2, 1),
+        )
+
     def forward(self, data_dict):
         output_dict = {}
 
@@ -183,6 +189,16 @@ class GeoTransformer(nn.Module):
         output_dict['ref_node_corr_knn_masks'] = ref_node_corr_knn_masks
         output_dict['src_node_corr_knn_masks'] = src_node_corr_knn_masks
 
+        # 7.3 Compute Uncertainty
+        ref_node_corr_knn_log_var = self.uncertainty_head(ref_node_corr_knn_feats.view(-1, ref_node_corr_knn_feats.shape[-1]))
+        ref_node_corr_knn_log_var = ref_node_corr_knn_log_var.view(ref_node_corr_knn_feats.shape[0], ref_node_corr_knn_feats.shape[1]).squeeze(-1) # (P, K)
+        
+        src_node_corr_knn_log_var = self.uncertainty_head(src_node_corr_knn_feats.view(-1, src_node_corr_knn_feats.shape[-1]))
+        src_node_corr_knn_log_var = src_node_corr_knn_log_var.view(src_node_corr_knn_feats.shape[0], src_node_corr_knn_feats.shape[1]).squeeze(-1) # (P, K)
+
+        output_dict['ref_node_corr_knn_log_var'] = ref_node_corr_knn_log_var
+        output_dict['src_node_corr_knn_log_var'] = src_node_corr_knn_log_var
+
         # 8. Optimal transport
         matching_scores = torch.einsum('bnd,bmd->bnm', ref_node_corr_knn_feats, src_node_corr_knn_feats)  # (P, K, K)
         matching_scores = matching_scores / feats_f.shape[1] ** 0.5
@@ -195,19 +211,23 @@ class GeoTransformer(nn.Module):
             if not self.fine_matching.use_dustbin:
                 matching_scores = matching_scores[:, :-1, :-1]
 
-            ref_corr_points, src_corr_points, corr_scores, estimated_transform = self.fine_matching(
+            ref_corr_points, src_corr_points, corr_scores, estimated_transform, ref_corr_log_var, src_corr_log_var = self.fine_matching(
                 ref_node_corr_knn_points,
                 src_node_corr_knn_points,
                 ref_node_corr_knn_masks,
                 src_node_corr_knn_masks,
                 matching_scores,
                 node_corr_scores,
+                ref_node_corr_knn_log_var,
+                src_node_corr_knn_log_var,
             )
 
             output_dict['ref_corr_points'] = ref_corr_points
             output_dict['src_corr_points'] = src_corr_points
             output_dict['corr_scores'] = corr_scores
             output_dict['estimated_transform'] = estimated_transform
+            output_dict['ref_corr_log_var'] = ref_corr_log_var
+            output_dict['src_corr_log_var'] = src_corr_log_var
 
         return output_dict
 

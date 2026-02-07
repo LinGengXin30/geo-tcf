@@ -83,6 +83,27 @@ class Tester(SingleTester):
             transform=release_cuda(data_dict['transform']),
         )
 
+        # Save txt for TCF
+        ref_corr_points = release_cuda(output_dict['ref_corr_points'])
+        src_corr_points = release_cuda(output_dict['src_corr_points'])
+        ref_corr_log_var = release_cuda(output_dict['ref_corr_log_var'])
+        src_corr_log_var = release_cuda(output_dict['src_corr_log_var'])
+
+        # Convert log var to sigma
+        ref_sigma = np.exp(0.5 * ref_corr_log_var)
+        src_sigma = np.exp(0.5 * src_corr_log_var)
+
+        # Stack: src_x, src_y, src_z, tgt_x, tgt_y, tgt_z, sigma_src, sigma_tgt
+        data = np.concatenate([
+            src_corr_points,
+            ref_corr_points,
+            src_sigma[:, None],
+            ref_sigma[:, None]
+        ], axis=1)
+
+        txt_file_name = osp.join(self.output_dir, f'{seq_id}_{src_frame}_{ref_frame}.txt')
+        np.savetxt(txt_file_name, data, fmt='%.6f')
+
 
 def main():
     cfg = make_cfg()

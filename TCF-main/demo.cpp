@@ -46,12 +46,22 @@ int main(int argc, char** argv) {
     Eigen::MatrixXf matches;
     loadMatrixDynamic(path_matches, matches);
     MatfD3 source_match = matches.leftCols(3);
-    MatfD3 target_match = matches.rightCols(3);
+    MatfD3 target_match = matches.block(0, 3, matches.rows(), 3);
+
+    Matf1D sigma_src = Matf1D::Zero(1, matches.rows());
+    Matf1D sigma_tgt = Matf1D::Zero(1, matches.rows());
+
+    if (matches.cols() >= 8) {
+        sigma_src = matches.col(6).transpose();
+        sigma_tgt = matches.col(7).transpose();
+    } else {
+        std::cout << "Warning: Uncertainty not found. Using default 0.\n";
+    }
 
     // Start registration
     TicToc tic_tcf;
     std::srand(unsigned(std::time(nullptr)));
-    Eigen::Matrix4f trans = twoStageConsensusFilter(source_match, target_match, 3*th);
+    Eigen::Matrix4f trans = twoStageConsensusFilter(source_match, target_match, sigma_src, sigma_tgt, 3*th);
     double time_registration = tic_tcf.toc();
     std::cout << "Runtime: " << time_registration << " ms.\n";
 

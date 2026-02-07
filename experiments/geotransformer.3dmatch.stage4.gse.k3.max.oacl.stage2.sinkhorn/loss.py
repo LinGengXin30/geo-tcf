@@ -71,24 +71,82 @@ class FineMatchingLoss(nn.Module):
         return loss
 
 
+class UncertaintyLoss(nn.Module):
+    def __init__(self, cfg):
+        super(UncertaintyLoss, self).__init__()
+        self.positive_radius = cfg.fine_loss.positive_radius
+        self.clamp_min = -10.0
+        self.clamp_max = 10.0
+
+    def forward(self, output_dict, data_dict):
+        ref_node_corr_knn_points = output_dict['ref_node_corr_knn_points']
+        src_node_corr_knn_points = output_dict['src_node_corr_knn_points']
+        ref_node_corr_knn_masks = output_dict['ref_node_corr_knn_masks']
+        src_node_corr_knn_masks = output_dict['src_node_corr_knn_masks']
+        
+        ref_node_corr_knn_log_var = output_dict['ref_node_corr_knn_log_var']
+        src_node_corr_knn_log_var = output_dict['src_node_corr_knn_log_var']
+        
+        transform = data_dict['transform']
+
+        src_node_corr_knn_points_trans = apply_transform(src_node_corr_knn_points, transform)
+        dists_sq = pairwise_distance(ref_node_corr_knn_points, src_node_corr_knn_points_trans)
+        
+        gt_masks = torch.logical_and(ref_node_corr_knn_masks.unsqueeze(2), src_node_corr_knn_masks.unsqueeze(1))
+        gt_corr_map = torch.lt(dists_sq, self.positive_radius ** 2)
+        gt_corr_map = torch.logical_and(gt_corr_map, gt_masks)
+        
+        if gt_corr_map.sum() == 0:
+            zero_val = torch.tensor(0.0).to(dists_sq.device)
+            return zero_val, zero_val, zero_val, zero_val
+            
+        batch_indices, ref_indices, src_indices = torch.nonzero(gt_corr_map, as_tuple=True)
+        
+        pos_dists_sq = dists_sq[batch_indices, ref_indices, src_indices]
+        pos_ref_log_var = ref_node_corr_knn_log_var[batch_indices, ref_indices]
+        pos_src_log_var = src_node_corr_knn_log_var[batch_indices, src_indices]
+        
+        pos_log_var = torch.logaddexp(pos_ref_log_var, pos_src_log_var)
+        pos_log_var = torch.clamp(pos_log_var, min=self.clamp_min, max=self.clamp_max)
+        
+        precision = torch.exp(-pos_log_var)
+        loss = 0.5 * precision * pos_dists_sq + 0.5 * pos_log_var
+        
+        # Statistics for logging
+        with torch.no_grad():
+            sigma = torch.exp(0.5 * pos_log_var)
+            mean_sigma = sigma.mean()
+            min_sigma = sigma.min()
+            max_sigma = sigma.max()
+
+        return loss.mean(), mean_sigma, min_sigma, max_sigma
+
+
 class OverallLoss(nn.Module):
     def __init__(self, cfg):
         super(OverallLoss, self).__init__()
         self.coarse_loss = CoarseMatchingLoss(cfg)
         self.fine_loss = FineMatchingLoss(cfg)
+        self.uncertainty_loss = UncertaintyLoss(cfg)
         self.weight_coarse_loss = cfg.loss.weight_coarse_loss
         self.weight_fine_loss = cfg.loss.weight_fine_loss
+        self.weight_uncertainty_loss = 0.1
 
     def forward(self, output_dict, data_dict):
         coarse_loss = self.coarse_loss(output_dict)
         fine_loss = self.fine_loss(output_dict, data_dict)
+        uncertainty_loss, mean_sigma, min_sigma, max_sigma = self.uncertainty_loss(output_dict, data_dict)
 
-        loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss
+        loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss + self.weight_uncertainty_loss * uncertainty_loss
 
         return {
             'loss': loss,
             'c_loss': coarse_loss,
             'f_loss': fine_loss,
+            'u_loss': uncertainty_loss,
+            'mean_sigma': mean_sigma,
+            'min_sigma': min_sigma,
+            'max_sigma': max_sigma,
         }
 
 

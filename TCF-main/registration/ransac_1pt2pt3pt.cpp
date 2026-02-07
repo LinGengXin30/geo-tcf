@@ -1,6 +1,6 @@
 #include "registration/ransac_1pt2pt3pt.h"
 
-Matf6D ransac1Pt(Matf6D& x, float t) {
+Matf6D ransac1Pt(Matf6D& x, Matf2D& sigma, float t) {
     int s = 1;
     int max_trials = 10000;
     int npts = x.cols();
@@ -14,6 +14,11 @@ Matf6D ransac1Pt(Matf6D& x, float t) {
     float t2 = 2.0 * t; // 
     float eps = std::numeric_limits<float>::epsilon();
     
+    // Dynamic Threshold Parameters
+    float gamma = 1.0f;
+    float max_thresh = 5.0f * t2;
+    Matf1D combined_sigma = sigma.colwise().sum(); // Combine src and tgt sigma
+    
     while (N > trialcount) {
         int ind = std::rand() % npts;
         Eigen::Matrix<float, 6, 1> seedpoint = x.col(ind);
@@ -22,10 +27,16 @@ Matf6D ransac1Pt(Matf6D& x, float t) {
         Matf1D D1 = lineset.topRows(3).colwise().norm();
         Matf1D D2 = lineset.bottomRows(3).colwise().norm();
         Matf1D len = (D1 - D2).array().abs();
-       
-        Mati1D flag = (len.array() < t2).cast<int>();
+        
+        // Dynamic Threshold for Seed
+        float s_seed = combined_sigma(0, ind);
+        Matf1D margins = gamma * (combined_sigma.array() + s_seed);
+        Matf1D thresholds = (t2 + margins.array()).min(max_thresh);
+
+        Mati1D flag = (len.array() < thresholds.array()).cast<int>();
         Mati1D inlier_column = getNonZeroColumnIndicesFromRowVector(flag);
         Matf6D inliers = x(Eigen::all, inlier_column);
+        Matf1D inliers_sigma = combined_sigma(Eigen::all, inlier_column);
 
         int s1 = inliers.cols();
         int inlier_size = 0; // 
@@ -38,7 +49,15 @@ Matf6D ransac1Pt(Matf6D& x, float t) {
             computeDistanceMatrix(src, src_dist_matrix);
             computeDistanceMatrix(dst, dst_dist_matrix);
             Eigen::MatrixXf Z = (src_dist_matrix - dst_dist_matrix).array().abs();
-            Eigen::MatrixXi F = (Z.array() < t2).cast<int>();
+            
+            // Dynamic Threshold Matrix
+            int n_in = inliers_sigma.cols();
+            Eigen::MatrixXf S_row = inliers_sigma.replicate(n_in, 1);
+            Eigen::MatrixXf S_col = inliers_sigma.transpose().replicate(1, n_in);
+            Eigen::MatrixXf Margins = gamma * (S_row + S_col);
+            Eigen::MatrixXf Th = (t2 + Margins.array()).min(max_thresh);
+            
+            Eigen::MatrixXi F = (Z.array() < Th.array()).cast<int>();
             inlier_size = std::ceil(std::sqrt(F.sum()));
             
             Mati1D F_colwise_sum = F.colwise().sum();
@@ -49,6 +68,8 @@ Matf6D ransac1Pt(Matf6D& x, float t) {
                 sorted_column_indices_total.begin() + inlier_size);
             Matf6D selected_inliers = inliers(Eigen::all, sorted_column_indices_inlier);
             inliers = selected_inliers;
+            Matf1D selected_sigma = inliers_sigma(Eigen::all, sorted_column_indices_inlier);
+            inliers_sigma = selected_sigma;
 
             if ((s1 - inlier_size) < 5) {
                 break;
