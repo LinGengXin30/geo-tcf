@@ -62,7 +62,7 @@ _C.eval.rte_threshold = 2.0
 _C.ransac = edict()
 _C.ransac.distance_threshold = 0.3
 _C.ransac.num_points = 4
-_C.ransac.num_iterations = 50000
+_C.ransac.num_iterations = 30000
 
 # optim config
 _C.optim = edict()
@@ -70,8 +70,8 @@ _C.optim.lr = 1e-4
 _C.optim.lr_decay = 0.95
 _C.optim.lr_decay_steps = 4
 _C.optim.weight_decay = 1e-6
-_C.optim.max_epoch = 320
-_C.optim.grad_acc_steps = 4
+_C.optim.max_epoch = 250
+_C.optim.grad_acc_steps = 1
 
 # model - backbone
 _C.backbone = edict()
@@ -91,7 +91,7 @@ _C.backbone.output_dim = 128
 _C.model = edict()
 _C.model.ground_truth_matching_radius = 0.6
 _C.model.num_points_in_patch = 128
-_C.model.num_sinkhorn_iterations = 100
+_C.model.num_sinkhorn_iterations = 50
 
 # model - Coarse Matching
 _C.coarse_matching = edict()
@@ -122,7 +122,7 @@ _C.fine_matching.use_dustbin = False
 _C.fine_matching.use_global_score = False
 _C.fine_matching.correspondence_threshold = 3
 _C.fine_matching.correspondence_limit = None
-_C.fine_matching.num_refinement_steps = 5
+_C.fine_matching.num_refinement_steps = 3
 
 # loss - Coarse level
 _C.coarse_loss = edict()
