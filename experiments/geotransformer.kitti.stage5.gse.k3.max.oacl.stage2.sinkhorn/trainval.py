@@ -1,5 +1,8 @@
 import argparse
 import time
+import sys
+import os
+sys.path.insert(0, os.path.abspath('../../..'))
 
 import torch.optim as optim
 
