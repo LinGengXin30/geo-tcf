@@ -10,7 +10,7 @@ set(CMAKE_BUILD_TYPE "Release")
 
 # multiple PCL exists, we select pcl-1.12
 find_package(PCL 1.12 REQUIRED)
-set(PCL_INCLUDE_DIRS /usr/local/include/pcl-1.12)
+# set(PCL_INCLUDE_DIRS /usr/local/include/pcl-1.12)
 # find_package(PCL REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})

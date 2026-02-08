@@ -1,4 +1,9 @@
 #include "utils/for_cloud.h"
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <cstdlib>
+#include <algorithm>
 
 void randomSampleCloud(const CloudPtr& cloud_in, 
     CloudPtr& cloud_out, int N) {

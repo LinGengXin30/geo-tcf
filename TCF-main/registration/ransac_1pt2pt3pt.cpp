@@ -1,4 +1,11 @@
 #include "registration/ransac_1pt2pt3pt.h"
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <algorithm>
+#include <limits>
+#include <cstdlib>
+#include <random>
 
 Matf6D ransac1Pt(Matf6D& x, Matf2D& sigma, float t) {
     int s = 1;
@@ -307,9 +314,13 @@ Eigen::Matrix4f ransac3Pt(const Matf6D& x, int s, float t) {
             }
 
             std::vector<int> loInliers_vec(&loInliers(0, 0), loInliers.data() + loInliers.size());
+            
+            std::random_device rd;
+            std::mt19937 g(rd());
+            
             while (loIter < loRansacMaxIter) {
                 loIter = loIter + 1;
-                std::random_shuffle(loInliers_vec.begin(), loInliers_vec.end());
+                std::shuffle(loInliers_vec.begin(), loInliers_vec.end(), g);
                 std::vector<int> loind(loInliers_vec.begin(), loInliers_vec.begin() + NOSample);
                 trans = rigidMotion(x(Eigen::seq(0, 2), loind), x(Eigen::seq(3, 5), loind));
                 Mati1D loUpdatedInliers = dist3d(trans, x, t);

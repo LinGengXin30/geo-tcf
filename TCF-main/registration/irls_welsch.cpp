@@ -1,4 +1,8 @@
 #include "registration/irls_welsch.h"
+#include <cmath>
+#include <limits>
+#include <cstdlib>
+#include <iostream>
 
 Eigen::Matrix4f saCauchyIRLSRigidModel(const Matf3D& src, const Matf3D& dst, const float& tau) {
     float prev_cost = std::pow(10, 15); // initial energy cost

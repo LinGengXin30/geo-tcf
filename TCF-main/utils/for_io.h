@@ -7,6 +7,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <sstream>
+#include <iterator>
 #include <Eigen/Core>
 #include <Eigen/Dense>
 

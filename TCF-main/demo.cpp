@@ -4,6 +4,10 @@
 #include "utils/for_time.h"
 #include <pcl/io/pcd_io.h>
 #include <nlohmann/json.hpp>  // for reading json file
+#include <iostream>
+#include <algorithm>
+#include <cstdlib>
+#include <ctime>
 
 using json = nlohmann::json;
 int main(int argc, char** argv) {
