@@ -31,6 +31,12 @@ int main(int argc, char** argv) {
     std::string path_matches = config["path_matches"];
     std::string path_gt = config["path_gt"];
 
+    // Override matches path if provided in command line args
+    if (argc > 1) {
+        path_matches = argv[1];
+        std::cout << "Using matches from command line: " << path_matches << "\n";
+    }
+
     // Load ground-truth pose
     Eigen::Matrix4f gt = Eigen::Matrix4f::Identity(); 
     loadMatrix44(path_gt, gt);
