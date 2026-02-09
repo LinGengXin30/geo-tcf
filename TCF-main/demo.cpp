@@ -28,11 +28,6 @@ int main(int argc, char** argv) {
     Eigen::Matrix4f gt = Eigen::Matrix4f::Identity(); 
     bool has_gt = false;
     if (!path_gt.empty()) {
-        loadMatrixDynamic(path_gt, gt); # Use dynamic loader for txt
-        // Wait, loadMatrixDynamic reads to Dynamic. GT is 4x4.
-        // Let's use loadMatrixDynamic and cast or just use custom logic if format is simple.
-        // But test.py saves with np.savetxt.
-        // Let's use loadMatrixDynamic then copy.
         Eigen::MatrixXf gt_dyn;
         loadMatrixDynamic(path_gt, gt_dyn);
         if (gt_dyn.rows() == 4 && gt_dyn.cols() == 4) {
