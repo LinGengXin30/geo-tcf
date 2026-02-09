@@ -105,6 +105,7 @@ class Tester(SingleTester):
         np.savetxt(txt_file_name, data, fmt='%.6f')
         
         # Save GT for TCF evaluation
+        transform = release_cuda(data_dict['transform'])
         gt_file_name = osp.join(self.output_dir, f'{seq_id}_{src_frame}_{ref_frame}.gt.txt')
         np.savetxt(gt_file_name, transform, fmt='%.6f')
 
