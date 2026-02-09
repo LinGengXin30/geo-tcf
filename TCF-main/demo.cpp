@@ -8,6 +8,12 @@
 #include <cstdlib>
 #include <ctime>
 #include <vector>
+#include <omp.h>
+
+struct PairInfo {
+    std::string matches_path;
+    std::string gt_path;
+};
 
 void process_single_pair(const std::string& path_matches, const std::string& path_gt, float th) {
     // Load correspondences
@@ -52,7 +58,10 @@ void process_single_pair(const std::string& path_matches, const std::string& pat
     }
 
     // Output CSV format for batch evaluation
-    std::cout << "CSV_RESULT," << re << "," << te << "," << time_registration << "\n";
+    #pragma omp critical
+    {
+        std::cout << "CSV_RESULT," << re << "," << te << "," << time_registration << "\n";
+    }
 }
 
 int main(int argc, char** argv) {
@@ -84,21 +93,26 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        std::vector<PairInfo> tasks;
         std::string line;
         while (std::getline(list_file, line)) {
             if (line.empty()) continue;
-            // Assuming file list format: "matches_path gt_path" (space separated)
-            // or just "matches_path" if no GT
             std::stringstream ss(line);
-            std::string matches_path, gt_path;
-            ss >> matches_path;
-            if (ss >> gt_path) {
-                // gt_path read successfully
-            } else {
-                gt_path = "";
+            PairInfo pair;
+            ss >> pair.matches_path;
+            if (!(ss >> pair.gt_path)) {
+                pair.gt_path = "";
             }
-            process_single_pair(matches_path, gt_path, th);
+            tasks.push_back(pair);
         }
+        
+        std::cout << "Loaded " << tasks.size() << " tasks. Processing with OpenMP..." << std::endl;
+
+        #pragma omp parallel for schedule(dynamic)
+        for (int i = 0; i < tasks.size(); ++i) {
+            process_single_pair(tasks[i].matches_path, tasks[i].gt_path, th);
+        }
+
     } else {
         // Single mode
         std::string path_matches = argv[1];

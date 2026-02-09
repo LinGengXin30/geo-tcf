@@ -48,17 +48,9 @@ def main():
 
     try:
         # 3. Run TCF in batch mode
-        # Set OMP_NUM_THREADS to avoid oversubscription if TCF uses OpenMP internally
-        # Since we run one process, we can let it use all cores or limit it.
-        # Usually letting it use all cores (default) is fine for single process batch.
-        # But if you want to be safe:
-        # env = os.environ.copy()
-        # env["OMP_NUM_THREADS"] = "8" 
-
+        # C++ binary will handle parallelism via OpenMP
         cmd = [args.tcf_bin, "--batch", file_list_path]
         
-        # We need to capture stdout in real-time or wait for finish
-        # For progress bar, we might want to read line by line
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -71,33 +63,43 @@ def main():
         
         for line in process.stdout:
             if line.startswith("CSV_RESULT"):
-                _, re, te, time_ms = line.strip().split(",")
-                re = float(re)
-                te = float(te)
-                time_ms = float(time_ms)
-                
-                re_list.append(re)
-                te_list.append(te)
-                time_list.append(time_ms)
-                
-                if re < args.re_thresh and te < args.te_thresh:
-                    success_count += 1
-                
-                pbar.update(1)
+                try:
+                    parts = line.strip().split(",")
+                    if len(parts) >= 4:
+                        _, re, te, time_ms = parts[:4]
+                        re = float(re)
+                        te = float(te)
+                        time_ms = float(time_ms)
+                        
+                        re_list.append(re)
+                        te_list.append(te)
+                        time_list.append(time_ms)
+                        
+                        if re < args.re_thresh and te < args.te_thresh:
+                            success_count += 1
+                        
+                        pbar.update(1)
+                except ValueError:
+                    continue
         
         pbar.close()
         process.wait()
         
         if process.returncode != 0:
             print(f"TCF process exited with error code {process.returncode}")
-            print("STDERR:", process.stderr.read())
+            stderr_output = process.stderr.read()
+            if stderr_output:
+                print("STDERR:", stderr_output)
 
     except Exception as e:
         print(f"Error during execution: {e}")
     finally:
         # Cleanup
         if os.path.exists(file_list_path):
-            os.remove(file_list_path)
+            try:
+                os.remove(file_list_path)
+            except:
+                pass
 
     # 4. Summary
     num_samples = len(re_list)
