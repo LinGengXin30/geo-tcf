@@ -61,6 +61,8 @@ int main(int argc, char** argv) {
     Matf1D sigma_src = Matf1D::Zero(1, matches.rows());
     Matf1D sigma_tgt = Matf1D::Zero(1, matches.rows());
 
+    std::cout << "Loaded matches with shape: " << matches.rows() << " x " << matches.cols() << "\n";
+
     if (matches.cols() >= 8) {
         sigma_src = matches.col(6).transpose();
         sigma_tgt = matches.col(7).transpose();
@@ -78,6 +80,9 @@ int main(int argc, char** argv) {
     // compute error
     std::pair<double, double> error = computeTransError(trans, gt);
     std::cout << "RE: " << error.first << " deg, TE: " << error.second << " m.\n";
+
+    // Output CSV format for batch evaluation
+    std::cout << "CSV_RESULT," << error.first << "," << error.second << "," << time_registration << "\n";
     
     return 0;
 }
