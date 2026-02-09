@@ -28,9 +28,23 @@ def main():
 
     for match_file in tqdm(match_files):
         try:
+            # Construct expected GT file path
+            # Assuming format: {seq_id}_{src}_{ref}.txt -> {seq_id}_{src}_{ref}.gt.txt
+            gt_file = match_file.replace(".txt", ".gt.txt")
+            if not os.path.exists(gt_file):
+                # Fallback or skip
+                gt_file = "" # Demo will skip error computation
+
             # Call TCF executable
+            cmd = [args.tcf_bin, match_file]
+            if gt_file:
+                cmd.append(gt_file)
+            
+            # Pass resolution if needed (optional, using default)
+            # cmd.append("0.3") 
+
             result = subprocess.run(
-                [args.tcf_bin, match_file],
+                cmd,
                 capture_output=True,
                 text=True,
                 check=True
@@ -54,6 +68,8 @@ def main():
                     
         except subprocess.CalledProcessError as e:
             print(f"Error processing {match_file}: {e}")
+            print(f"STDOUT: {e.stdout}")
+            print(f"STDERR: {e.stderr}")
         except Exception as e:
             print(f"Unexpected error on {match_file}: {e}")
 

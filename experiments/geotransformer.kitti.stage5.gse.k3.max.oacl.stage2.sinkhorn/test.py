@@ -103,6 +103,10 @@ class Tester(SingleTester):
 
         txt_file_name = osp.join(self.output_dir, f'{seq_id}_{src_frame}_{ref_frame}.txt')
         np.savetxt(txt_file_name, data, fmt='%.6f')
+        
+        # Save GT for TCF evaluation
+        gt_file_name = osp.join(self.output_dir, f'{seq_id}_{src_frame}_{ref_frame}.gt.txt')
+        np.savetxt(gt_file_name, transform, fmt='%.6f')
 
 
 def main():

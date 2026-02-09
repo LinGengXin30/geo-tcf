@@ -2,54 +2,47 @@
 #include "utils/for_cloud.h"
 #include "utils/for_io.h"
 #include "utils/for_time.h"
-#include <pcl/io/pcd_io.h>
-#include <nlohmann/json.hpp>  // for reading json file
 #include <iostream>
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
 
-using json = nlohmann::json;
 int main(int argc, char** argv) {
-    std::cout << "==========================================\n";
-    std::cout << "======== Demo of TCF Registration ========\n";
-    std::cout << "==========================================\n";
-
-    // Open the JSON file
-    std::ifstream ifs("../config/config_eth.json"); // eth 
-    // std::ifstream ifs("../config/config_kitti.json"); // kitti 
-    if (!ifs.is_open()) {
-        std::cout << "Cannot open config.json file.\n";
+    if (argc < 2) {
+        std::cout << "Usage: ./demo matches.txt [gt.txt] [resolution]\n";
         return 1;
     }
 
-    // Parse the JSON file
-    json config;
-    ifs >> config;
-    std::string path_source_cloud = config["path_source_cloud"];
-    std::string path_target_cloud = config["path_target_cloud"];
-    std::string path_matches = config["path_matches"];
-    std::string path_gt = config["path_gt"];
+    std::string path_matches = argv[1];
+    std::string path_gt = "";
+    float th = 0.30f; // Default resolution for Kitti
 
-    // Override matches path if provided in command line args
-    if (argc > 1) {
-        path_matches = argv[1];
-        std::cout << "Using matches from command line: " << path_matches << "\n";
+    if (argc >= 3) {
+        path_gt = argv[2];
+    }
+    if (argc >= 4) {
+        th = std::atof(argv[3]);
     }
 
     // Load ground-truth pose
     Eigen::Matrix4f gt = Eigen::Matrix4f::Identity(); 
-    loadMatrix44(path_gt, gt);
-    std::cout << "GT pose: \n" << gt << "\n";
+    bool has_gt = false;
+    if (!path_gt.empty()) {
+        loadMatrixDynamic(path_gt, gt); # Use dynamic loader for txt
+        // Wait, loadMatrixDynamic reads to Dynamic. GT is 4x4.
+        // Let's use loadMatrixDynamic and cast or just use custom logic if format is simple.
+        // But test.py saves with np.savetxt.
+        // Let's use loadMatrixDynamic then copy.
+        Eigen::MatrixXf gt_dyn;
+        loadMatrixDynamic(path_gt, gt_dyn);
+        if (gt_dyn.rows() == 4 && gt_dyn.cols() == 4) {
+             gt = gt_dyn;
+             has_gt = true;
+        } else {
+             std::cout << "Warning: GT file found but not 4x4.\n";
+        }
+    }
 
-    // Load point cloud and resolution
-    // this can be replaced by a user-defined value
-    CloudPtr source_cloud(new PointCloud), target_cloud(new PointCloud);
-    pcl::io::loadPCDFile(path_source_cloud, *source_cloud);
-    pcl::io::loadPCDFile(path_target_cloud, *target_cloud);
-    float rs = pcResolution(source_cloud);
-    float rt = pcResolution(target_cloud);
-    float th = std::max(rs, rt);
     std::cout << "Resolution: " << th << " m\n";
 
     // Load correspondences
@@ -77,12 +70,21 @@ int main(int argc, char** argv) {
     double time_registration = tic_tcf.toc();
     std::cout << "Runtime: " << time_registration << " ms.\n";
 
+    double re = -1.0;
+    double te = -1.0;
+
     // compute error
-    std::pair<double, double> error = computeTransError(trans, gt);
-    std::cout << "RE: " << error.first << " deg, TE: " << error.second << " m.\n";
+    if (has_gt) {
+        std::pair<double, double> error = computeTransError(trans, gt);
+        re = error.first;
+        te = error.second;
+        std::cout << "RE: " << re << " deg, TE: " << te << " m.\n";
+    } else {
+        std::cout << "GT not provided, skipping error computation.\n";
+    }
 
     // Output CSV format for batch evaluation
-    std::cout << "CSV_RESULT," << error.first << "," << error.second << "," << time_registration << "\n";
+    std::cout << "CSV_RESULT," << re << "," << te << "," << time_registration << "\n";
     
     return 0;
 }
