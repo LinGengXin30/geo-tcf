@@ -15,6 +15,9 @@ def main():
     args = parser.parse_args()
 
     match_files = glob.glob(os.path.join(args.matches_dir, "*.txt"))
+    # Filter out .gt.txt files
+    match_files = [f for f in match_files if not f.endswith(".gt.txt")]
+    
     if not match_files:
         print(f"No .txt files found in {args.matches_dir}")
         return
@@ -67,9 +70,10 @@ def main():
                     break
                     
         except subprocess.CalledProcessError as e:
-            print(f"Error processing {match_file}: {e}")
-            print(f"STDOUT: {e.stdout}")
-            print(f"STDERR: {e.stderr}")
+            # print(f"Error processing {match_file}: {e}")
+            # print(f"STDOUT: {e.stdout}")
+            # print(f"STDERR: {e.stderr}")
+            pass # Suppress individual error prints to avoid spamming console
         except Exception as e:
             print(f"Unexpected error on {match_file}: {e}")
 
